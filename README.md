@@ -25,7 +25,7 @@ La solución implementada cubre el 100% de los requisitos solicitados en la prue
 
 ## Estructura del Proyecto
 
-
+```text
 .
 ├── app/
 │   ├── main.py            # Lógica central de la API y Endpoints
