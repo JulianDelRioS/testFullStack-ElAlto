@@ -12,7 +12,8 @@ app = FastAPI(
 async def search_stations(
     lat: float = Query(..., description="Latitud de la ubicación actual"),
     lng: float = Query(..., description="Longitud de la ubicación actual"),
-    product: str = Query(..., description="Producto a buscar (93, 95, 97, diesel, kerosene)"),
+    # Validación estricta mediante regex para aceptar solo los tipos solicitados
+    product: str = Query(..., pattern="^(93|95|97|diesel|kerosene)$", description="Producto: 93, 95, 97, diesel, kerosene"),
     nearest: bool = Query(False, description="Filtro para la estación más cercana"),
     store: bool = Query(False, description="Filtro para estaciones con tienda"),
     cheapest: bool = Query(False, description="Filtro para el menor precio")
@@ -26,7 +27,7 @@ async def search_stations(
             message="No se pudo obtener información de la fuente de datos externa."
         )
 
-    # 2. Normalización del producto solicitado (Mapeo de entrada a formato de la API)
+    # 2. Normalización del producto solicitado
     product_map = {
         "93": "Gasolina 93",
         "95": "Gasolina 95",
@@ -35,24 +36,21 @@ async def search_stations(
         "kerosene": "Kerosene"
     }
     
-    # Identificamos el producto. Si no coincide, por defecto buscamos Gasolina 93.
-    search_term = next((v for k, v in product_map.items() if k in product.lower()), "Gasolina 93")
-    
+    search_term = product_map[product]
     candidates = []
 
-    # 3. Procesamiento, Filtrado y Cálculo de Distancias
+    # 3. Procesamiento y Filtrado
     for s in stations_list:
-        # Filtro de Tienda: Si 'store' es True, saltamos estaciones sin NombreTienda
+        # Filtro de Tienda
         if store:
             tienda_info = s.get("Tienda") or {}
             if not tienda_info.get("NombreTienda"):
                 continue
 
-        # Obtención de Precios: Buscamos el precio del producto solicitado
+        # Obtención de Precios del producto específico solicitado
         prices = s.get("Prices", [])
         p_info = next((p for p in prices if p.get("Producto") == search_term), None)
         
-        # Si la estación no tiene el producto o no tiene precio, la descartamos
         if not p_info or not p_info.get("Precio"):
             continue
 
@@ -61,7 +59,7 @@ async def search_stations(
             s_lat = float(s.get("Latitud"))
             s_lng = float(s.get("Longitud"))
             
-            # Calculamos la distancia lineal (Haversine)
+            # Cálculo de distancia
             dist = calculate_distance(lat, lng, s_lat, s_lng)
             
             candidates.append({
@@ -75,26 +73,20 @@ async def search_stations(
     if not candidates:
         raise HTTPException(
             status_code=404, 
-            detail="No se encontraron estaciones que cumplan con los criterios seleccionados."
+            detail="No se encontraron estaciones para los criterios seleccionados."
         )
 
-    # 4. Lógica de los 4 Casos de Búsqueda (Ordenamiento)
+    # 4. Lógica de Ordenamiento
     if cheapest:
-        # Casos: "Menor precio" y "Tienda + Menor precio"
-        # Ordenamos primero por precio y luego por distancia como desempate
         candidates.sort(key=lambda x: (x["price"], x["dist"]))
     else:
-        # Casos: "Más cercana" y "Más cercana con tienda"
-        # Ordenamos puramente por distancia
         candidates.sort(key=lambda x: x["dist"])
 
-    # 5. Construcción de la Respuesta 
+    # 5. Construcción de la Respuesta Dinámica
     winner = candidates[0]
     s_data = winner["raw"]
     
-    p93_val = next((p.get("Precio") for p in s_data.get("Prices", []) if "93" in p.get("Producto")), 0)
-
-    # Mapeo final de campos 
+    # Mapeo final de campos
     final_station_data = {
         "id": str(s_data.get("CodEs")),
         "compania": str(s_data.get("Compania")).upper(),
@@ -104,7 +96,8 @@ async def search_stations(
         "latitud": float(s_data.get("Latitud")),
         "longitud": float(s_data.get("Longitud")),
         "distancia(lineal)": winner["dist"],
-        "precios93": int(p93_val),
+        # El campo de precio ahora es dinámico según la búsqueda
+        f"precio_{product}": winner["price"],
         "tienda": {
             "codigo": s_data.get("Tienda", {}).get("CodigoTienda"),
             "nombre": s_data.get("Tienda", {}).get("NombreTienda"),

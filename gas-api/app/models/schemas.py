@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Optional, List, Any
+from typing import Optional, Any
 
 class TiendaSchema(BaseModel):
     codigo: Optional[str] = None
@@ -14,14 +14,15 @@ class StationData(BaseModel):
     region: str
     latitud: float
     longitud: float
-    distancia_lineal: float = Field(..., alias="distancia(lineal)") 
-    precios93: int
+    # El alias permite que el JSON use el nombre con paréntesis pero el código use guion bajo
+    distancia_lineal: float = Field(..., alias="distancia(lineal)")
     tienda: Optional[TiendaSchema]
     tiene_tienda: bool
 
     class Config:
-        # Esto permite que Pydantic acepte el nombre con paréntesis
         populate_by_name = True
+        
+        extra = "allow" 
 
 class SearchResponse(BaseModel):
     success: bool
