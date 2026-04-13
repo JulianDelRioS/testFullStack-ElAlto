@@ -27,7 +27,7 @@ La solución implementada cubre el 100% de los requisitos solicitados en la prue
 
 ```text
 .
-├── app/
+├── gas-api/
 │   ├── main.py            # Lógica central de la API y Endpoints
 │   ├── services/
 │   │   └── bencina_service.py # Consumo de datos externos y headers de seguridad
